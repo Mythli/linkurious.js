@@ -7,6 +7,17 @@
   // Initialize packages:
   sigma.utils.pkg('sigma.canvas.labels');
 
+  function fillColoredText(ctx, str, x, y){
+    for(var i = 0; i < str.length; ++i){
+      var ch = str[i].text.toString();
+
+
+      ctx.fillStyle = str[i].color;
+      ctx.fillText(ch, x, y);
+      x += ctx.measureText(ch).width;
+    }
+  }
+
   /**
    * This label renderer will display the label of the node
    *
@@ -24,11 +35,41 @@
         labelWidth,
         labelOffsetX,
         labelOffsetY,
-        alignment = settings('labelAlignment'),
-        maxLineLength = settings('maxNodeLabelLineLength') || 0;
+        alignment = node.labelAlignment || settings('labelAlignment'),
+        coloredLabel = node.coloredLabel;
 
-    if (size <= settings('labelThreshold'))
+    if (size < settings('labelThreshold'))
       return;
+
+    // coloredLabel post processing to get full text and normalize it
+
+    if(typeof coloredLabel == 'string') {
+      coloredLabel = { text: coloredLabel }
+    }
+
+    if(coloredLabel && !(coloredLabel instanceof Array)) {
+      coloredLabel = [coloredLabel];
+    }
+
+    var labelText = '';
+
+    if (coloredLabel instanceof Array) {
+      coloredLabel = coloredLabel.map(function(el) {
+        var newEl = {text: el.text, color: el.color};
+
+        if (typeof el == 'string') {
+          newEl.text = el;
+        }
+
+        labelText += newEl.text;
+        return newEl;
+      });
+    }
+
+
+    if(labelText.length > 0) {
+      node.label = labelText;
+    }
 
     if (!node.label || typeof node.label !== 'string')
       return;
@@ -53,7 +94,18 @@
     context.fillStyle =
         (settings('labelColor') === 'node') ?
         node.color || settings('defaultNodeColor') :
-        settings('defaultLabelColor');
+            settings('defaultLabelColor');
+
+    // color postprocessing of coloredLabel to inject default color
+    coloredLabel = coloredLabel.map(function(el) {
+      var newEl = {text: el.text, color: el.color};
+
+      if(!newEl.color) {
+        newEl.color = context.fillStyle;
+      }
+
+      return newEl;
+    });
 
     labelOffsetX = 0;
     labelOffsetY = fontSize / 3;
@@ -73,7 +125,8 @@
         labelOffsetY = - size - 2 * fontSize / 3;
         break;
       case 'inside':
-        labelWidth = sigma.utils.canvas.getTextWidth(context, settings('approximateLabelWidth'), fontSize, node.label);
+        labelWidth = sigma.utils.canvas.getTextWidth(context,
+            settings('approximateLabelWidth'), fontSize, node.label);
         if (labelWidth <= (size + fontSize / 3) * 2) {
           break;
         }
@@ -86,81 +139,13 @@
         break;
     }
 
-    var lines = getLines(node.label, maxLineLength),
-        baseX = node[prefix + 'x'] + labelOffsetX,
-        baseY = Math.round(node[prefix + 'y'] + labelOffsetY);
+    var labelX = Math.round(node[prefix + 'x'] + labelOffsetX);
+    var labelY = Math.round(node[prefix + 'y'] + labelOffsetY);
 
-    for (var i = 0; i < lines.length; ++i) {
-      context.fillText(lines[i], baseX, baseY + i * (fontSize + 1));
+    if(coloredLabel instanceof Array) {
+      fillColoredText(context, coloredLabel, labelX, labelY);
+    } else {
+      context.fillText(node.label, labelX, labelY);
     }
   };
-
-  /**
-   * Split a text into several lines. Each line won't be longer than the specified maximum length.
-   * @param {string}  text            Text to split
-   * @param {number}  maxLineLength   Maximum length of a line. A value <= 1 will be treated as "infinity".
-   * @returns {Array<string>}         List of lines
-   */
-  function getLines(text, maxLineLength) {
-    if (maxLineLength <= 1) {
-      return [text];
-    }
-
-    var words = text.split(' '),
-        lines = [],
-        lineLength = 0,
-        lineIndex = -1,
-        lineList = [],
-        lineFull = true;
-
-    for (var i = 0; i < words.length; ++i) {
-      if (lineFull) {
-        if (words[i].length > maxLineLength) {
-          var parts = splitWord(words[i], maxLineLength);
-          for (var j = 0; j < parts.length; ++j) {
-            lines.push([parts[j]]);
-            ++lineIndex;
-          }
-          lineLength = parts[parts.length - 1].length;
-        } else {
-          lines.push([words[i]
-          ]);
-          ++lineIndex;
-          lineLength = words[i].length + 1;
-        }
-        lineFull = false;
-      } else if (lineLength + words[i].length <= maxLineLength) {
-        lines[lineIndex].push(words[i]);
-        lineLength += words[i].length + 1;
-      } else {
-        lineFull = true;
-        --i;
-      }
-    }
-
-    for (i = 0; i < lines.length; ++i) {
-      lineList.push(lines[i].join(' '))
-    }
-
-    return lineList;
-  }
-
-  /**
-   * Split a word into several lines (with a '-' at the end of each line but the last).
-   * @param {string} word       Word to split
-   * @param {number} maxLength  Maximum length of a line
-   * @returns {Array<string>}   List of lines
-   */
-  function splitWord(word, maxLength) {
-    var parts = [];
-
-    for (var i = 0; i < word.length; i += maxLength - 1) {
-      parts.push(word.substr(i, maxLength - 1) + '-');
-    }
-
-    var lastPartLen = parts[parts.length - 1].length;
-    parts[parts.length - 1] = parts[parts.length - 1].substr(0, lastPartLen - 1) + ' ';
-
-    return parts;
-  }
 }).call(this);
