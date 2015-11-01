@@ -38,6 +38,8 @@
         alignment = node.labelAlignment || settings('labelAlignment'),
         coloredLabel = node.coloredLabel;
 
+
+
     if (size < settings('labelThreshold'))
       return;
 
